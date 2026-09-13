@@ -228,6 +228,32 @@
     .loader-logo,.loader-progress{animation:none}
   }
 
+
+  #pwa-install-wrap{
+    position:fixed;right:14px;bottom:86px;z-index:1800;
+    display:none;
+  }
+  #pwa-install-btn{
+    border:1px solid var(--amber-dim);
+    background:#151a20;color:var(--text);
+    padding:11px 14px;border-radius:14px;
+    font-weight:800;font-size:12px;cursor:pointer;
+    box-shadow:0 12px 34px rgba(0,0,0,.38);
+  }
+  #pwa-install-btn b{color:var(--amber)}
+  #pwa-install-btn:active{transform:scale(.98)}
+  .pwa-mini-toast{
+    position:fixed;left:50%;bottom:88px;z-index:1900;
+    transform:translateX(-50%);
+    background:#171c22;color:var(--text);
+    border:1px solid var(--border);
+    border-radius:12px;padding:10px 14px;
+    font-size:12px;box-shadow:0 12px 30px rgba(0,0,0,.35);
+    opacity:0;pointer-events:none;transition:opacity .2s ease;
+    max-width:min(88vw,420px);text-align:center;
+  }
+  .pwa-mini-toast.show{opacity:1}
+
 </style>
 </head>
 <body>
@@ -1661,6 +1687,79 @@ init();
   setTimeout(hideLoader,2200);
 })();
 
+
+// --- PWA Android / installation ---
+(function(){
+  let deferredInstallPrompt = null;
+  const wrap = document.getElementById('pwa-install-wrap');
+  const btn = document.getElementById('pwa-install-btn');
+  const miniToast = document.getElementById('pwa-mini-toast');
+
+  function showMiniToast(msg){
+    if(!miniToast) return;
+    miniToast.textContent = msg;
+    miniToast.classList.add('show');
+    setTimeout(()=>miniToast.classList.remove('show'), 2600);
+  }
+
+  function isStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true;
+  }
+
+  // Enregistre le service worker, requis pour un vrai fonctionnement PWA hors ligne.
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', async ()=>{
+      try{
+        const reg = await navigator.serviceWorker.register('/service-worker.js', {scope:'/'});
+        console.log('PUSHER service worker actif', reg.scope);
+      }catch(err){
+        console.warn('Service worker non enregistré', err);
+      }
+    });
+  }
+
+  window.addEventListener('beforeinstallprompt', (event)=>{
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    if(wrap && !isStandalone()) wrap.style.display = 'block';
+  });
+
+  if(btn){
+    btn.addEventListener('click', async ()=>{
+      if(isStandalone()){
+        if(wrap) wrap.style.display='none';
+        return;
+      }
+      if(!deferredInstallPrompt){
+        showMiniToast("Dans Chrome : menu ⋮ → Ajouter à l'écran d'accueil / Installer l'application.");
+        return;
+      }
+      deferredInstallPrompt.prompt();
+      const choice = await deferredInstallPrompt.userChoice;
+      if(choice.outcome === 'accepted'){
+        showMiniToast('Installation de PUSHER lancée 🏔️');
+        if(wrap) wrap.style.display='none';
+      }
+      deferredInstallPrompt = null;
+    });
+  }
+
+  window.addEventListener('appinstalled', ()=>{
+    deferredInstallPrompt = null;
+    if(wrap) wrap.style.display='none';
+    showMiniToast('PUSHER est installé sur ton téléphone ✓');
+  });
+
+  if(isStandalone() && wrap) wrap.style.display='none';
+})();
+
 </script>
+
+<div id="pwa-install-wrap">
+  <button id="pwa-install-btn" type="button">📲 <b>Installer PUSHER</b></button>
+</div>
+<div id="pwa-mini-toast" class="pwa-mini-toast"></div>
+
 </body>
 </html>
